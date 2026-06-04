@@ -162,13 +162,13 @@
             }
         };
 
-        // Complete Synchronized State Architecture
+        // Complete Balanced State Architecture
         let G = {
             cash: 100, heat: 0, isHiding: false, intel: 0,
             strains: { efficiency: 1.0, stealth: 1.0, aggressivity: 1.0 },
             shops: [
-                { id: 'lemonade', name: 'Lemonade Stand Front', baseIncome: 1, owned: 0, type: 'standard', icon: '🍋' },
-                { id: 'toystore', name: 'Subterranean Toy Store', baseIncome: 10, owned: 0, type: 'high-heat', icon: '🧸' }
+                { id: 'lemonade', name: 'Lemonade Stand Front', baseCost: 10, baseIncome: 1, owned: 0, type: 'standard', icon: '🍋' },
+                { id: 'toystore', name: 'Subterranean Toy Store', baseCost: 120, baseIncome: 8, owned: 0, type: 'high-heat', icon: '🧸' }
             ],
             operators: [
                 { id: 'op_cipher', name: 'Ghost Cipher', rarity: 'Legendary', level: 1, assignedTo: 'lemonade', multiplier: 2.5, cost: 15, icon: '🥷', desc: 'Overwrites transactional ledger nodes directly.' },
@@ -177,39 +177,42 @@
         };
 
         let activeTab = 'buildings';
+        let stateChanged = true; // Optimization trigger to prevent layout thrashing
 
-        // Tab Selector Matrix Switching 
         function switchTab(t) {
             activeTab = t;
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.getElementById(`tab-${t}`).classList.remove('hidden');
             document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('bg-amber-500', 'text-black'); b.classList.add('text-stone-400'); });
             document.getElementById(`tab-btn-${t}`).classList.add('bg-amber-500', 'text-black');
-            renderActiveTabContent();
+            stateChanged = true;
         }
 
-        // Clicker Core Binding Hook
         document.getElementById('money-clicker').onclick = () => {
             G.cash += 1;
             if (!G.isHiding) G.heat = Math.min(100, G.heat + 0.4);
-            updateInterfaceUI();
+            stateChanged = true;
         };
 
         const hideBtn = document.getElementById('hide-btn');
         hideBtn.onclick = () => { 
             G.isHiding = !G.isHiding; 
             hideBtn.innerText = G.isHiding ? "RESUME OPS" : "HIDE OPERATIONS"; 
+            stateChanged = true;
         };
 
-        // Dynamic Component Deck Generators
+        // Render functions now execute inside the loop window only when state variations are flagged
         function renderActiveTabContent() {
+            if (!stateChanged) return;
+
             if (activeTab === 'buildings') {
                 const shopDiv = document.getElementById('shop');
                 shopDiv.innerHTML = ''; 
                 G.shops.forEach((s) => {
-                    let cost = Math.floor((s.baseIncome * 10) * Math.pow(1.15, s.owned));
+                    let cost = Math.floor(s.baseCost * Math.pow(1.15, s.owned));
                     let canAfford = G.cash >= cost;
                     let assignedOp = G.operators.find(o => o.assignedTo === s.id);
+                    let opBonus = assignedOp ? (assignedOp.multiplier * assignedOp.level) : 1;
                     
                     let div = document.createElement('div');
                     div.className = `border p-3 rounded flex flex-col justify-between gap-2 transition-all ${canAfford ? 'border-amber-500/40 bg-stone-900/30' : 'border-stone-900 bg-stone-950/40 opacity-60'}`;
@@ -219,7 +222,7 @@
                             <span class="text-xs font-mono font-bold text-amber-500">x${s.owned}</span>
                         </div>
                         <div class="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-stone-900">
-                            <span class="text-emerald-400 font-mono">+$${(s.baseIncome * s.owned * G.strains.efficiency * (assignedOp ? (assignedOp.multiplier * assignedOp.level) : 1)).toFixed(1)}/s</span>
+                            <span class="text-emerald-400 font-mono">+${(s.baseIncome * s.owned * G.strains.efficiency * opBonus).toFixed(1)}/s</span>
                             <button onclick="buyAsset('${s.id}')" class="px-2 py-1 text-[10px] font-bold rounded uppercase tracking-wider ${canAfford ? 'bg-amber-500 text-black cursor-pointer' : 'bg-stone-900 text-stone-600'}">
                                 Buy: $${cost}
                             </button>
@@ -271,16 +274,16 @@
                     container.appendChild(card);
                 });
             }
+            stateChanged = false;
         }
 
         function buyAsset(id) {
             let s = G.shops.find(x => x.id === id);
-            let cost = Math.floor((s.baseIncome * 10) * Math.pow(1.15, s.owned));
+            let cost = Math.floor(s.baseCost * Math.pow(1.15, s.owned));
             if (G.cash >= cost) {
                 G.cash -= cost;
                 s.owned++;
-                renderActiveTabContent();
-                updateInterfaceUI();
+                stateChanged = true;
             }
         }
 
@@ -290,8 +293,7 @@
                 G.intel -= op.cost;
                 op.level++;
                 op.cost = Math.floor(op.cost * 1.6);
-                renderActiveTabContent();
-                updateInterfaceUI();
+                stateChanged = true;
             }
         }
 
@@ -299,11 +301,9 @@
             G.operators.forEach(o => { if (o.assignedTo === targetId && targetId !== 'none') o.assignedTo = 'none'; });
             let op = G.operators.find(o => o.id === opId);
             op.assignedTo = targetId;
-            renderActiveTabContent();
-            updateInterfaceUI();
+            stateChanged = true;
         }
 
-        // Live CRT Visual Updates
         function updateVisualMatrix(state) {
             const statusDot = document.getElementById('status-dot');
             if (state.severity === 'STABLE') {
@@ -343,7 +343,6 @@
             document.getElementById('heat').innerText = G.heat.toFixed(1) + '%';
         }
 
-        // Core Game Loop Run Execution
         function gameLoop() {
             let state = SimulationEngine.getAuditState(G.heat);
             
@@ -351,11 +350,41 @@
                 G = SimulationEngine.processFailure(G);
                 G.heat = 50;
                 alert("RAID SUCCESSFUL: High-heat asset structures seized.");
-                renderActiveTabContent();
+                stateChanged = true;
             }
 
             document.getElementById('audit-status').innerText = state.severity;
             hideBtn.style.display = (state.severity !== 'STABLE') ? 'inline-block' : 'none';
 
             let inc = G.isHiding ? 0 : SimulationEngine.calculateIncome(G.shops, G.strains, G.operators);
-            let heatInc = G.isHiding ? -0.5 : SimulationEngine.
+            let heatInc = G.isHiding ? -0.5 : SimulationEngine.calculateHeatImpact(G.shops, G.strains);
+            
+            G.cash += inc / 60;
+            G.heat = Math.max(0, Math.min(100, G.heat + (heatInc / 60)));
+
+            if (!G.isHiding && Math.random() < 0.005) {
+                G.intel += 1;
+                stateChanged = true;
+            }
+
+            // Detect cash changes dynamically to update button availability state visual highlights
+            if (Math.floor(G.cash) % 5 === 0) stateChanged = true;
+
+            updateInterfaceUI();
+            renderActiveTabContent();
+            updateVisualMatrix(state);
+        }
+        
+        function exportStandaloneApp() {
+            const currentHTML = document.documentElement.outerHTML;
+            const blob = new Blob([currentHTML], { type: 'text/html' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'BigSpenderApp.html';
+            link.click();
+        }
+
+        setInterval(gameLoop, 1000/60);
+    </script>
+</body>
+</html>
