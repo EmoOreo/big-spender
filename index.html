@@ -26,6 +26,25 @@
             ]
         };
 
+        function renderShop() {
+            const shopDiv = document.getElementById('shop');
+            shopDiv.innerHTML = ''; 
+            G.shops.forEach((s) => {
+                let div = document.createElement('div');
+                div.className = 'item';
+                div.innerHTML = `${s.name} - $${s.baseIncome}/s (Owned: ${s.owned})`;
+                div.onclick = () => {
+                    let cost = s.baseIncome * 10;
+                    if (G.cash >= cost) {
+                        G.cash -= cost;
+                        s.owned++;
+                        renderShop();
+                    }
+                };
+                shopDiv.appendChild(div);
+            });
+        }
+
         function gameLoop() {
             let inc = SimulationEngine.calculateIncome(G.shops, G.strains);
             let heatInc = SimulationEngine.calculateHeatImpact(G.shops, G.strains);
@@ -38,6 +57,7 @@
             document.getElementById('heat').innerText = G.heat.toFixed(1) + '%';
         }
 
+        renderShop();
         setInterval(gameLoop, 1000/60);
     </script>
 </body>
