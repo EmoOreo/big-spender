@@ -16,12 +16,12 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
-        java-version: '17'
+        java-version: '21' # Fixed: Set to 21 to clear the 'invalid source release: 21' error
 
     - name: Set up Node.js Environment
       uses: actions/setup-node@v4
       with:
-        node-version: '22' # Fixed: Upgraded from 20 to 22 to satisfy Capacitor CLI
+        node-version: '22' # Fixed: Set to 22 to satisfy the Capacitor CLI requirement
 
     - name: Clean Build Workspace Environment
       run: |
@@ -50,6 +50,7 @@ jobs:
     - name: Inject Secure Cryptographic Signature
       run: |
         cd android/app/build/outputs/apk/release/
+        # Uses official Android SDK build-tools to sign and output your customized application container
         ${ANDROID_HOME}/build-tools/34.0.0/apksigner sign \
           --ks ../../../../bigspender-release.jks \
           --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
