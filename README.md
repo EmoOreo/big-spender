@@ -1,16 +1,11 @@
-# Big Spender 💸
+# Big Spender: Idle Tycoon 💸
 
-A high-stakes, browser-based arcade game where you have 7 days to spend $1,000,000 while avoiding the FBI.
+A data-driven incremental game about empire building and avoiding the Feds.
 
-## How to Play
-- **Goal:** Reach $0 balance before the 7-day timer ends.
-- **Controls:**
-  - **Mobile:** Use the virtual joystick to move and the on-screen buttons to shop/sprint.
-  - **Desktop:** Use `WASD` or `Arrow Keys` to move, `E` to open shop, and `Shift` to sprint.
-- **Mechanics:** - Making expensive purchases increases your "Heat." 
-  - If your Heat reaches 100%, you get **BUSTED!** 🚔
-  - Visit the Mansion at the bottom-right of the map to "Sleep" and lower your Heat.
+## Mechanics
+- **Automated Income**: Purchase assets to generate cash per second.
+- **Dynamic Heat**: As your empire grows, so does your heat.
+- **Strategy**: Balance your wealth acquisition before the FBI shuts you down.
 
-## Deployment
-This game is designed to be played directly in a browser. It is fully mobile-responsive and optimized for GitHub Pages.
-# big-spender
+## Development
+This project is built using a modular JavaScript architecture, optimized for future scaling into complex simulation systems.
