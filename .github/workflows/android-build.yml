@@ -23,14 +23,18 @@ jobs:
       with:
         node-version: '20'
 
-    - name: Install Project Dependencies
+    - name: Clean Build Workspace Environment
       run: |
-        npm install
+        rm -rf android
+        rm -rf node_modules
+
+    - name: Install Pure Project Dependencies
+      run: |
         npm install @capacitor/core @capacitor/cli @capacitor/android
 
     - name: Compile and Sync Native Android Wrappers
       run: |
-        npx cap add android || true
+        npx cap add android
         npx cap copy android
 
     - name: Build Native App Package (Gradle)

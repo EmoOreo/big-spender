@@ -1,0 +1,6 @@
+{
+  "appId": "com.bigspender.tycoon",
+  "appName": "Big Spender Tycoon",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Big Spender: Tycoon Edition</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: monospace;
+            background-color: #0b0804;
+            color: #f3e5be;
+            margin: 0;
+            overflow: hidden;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+    </style>
+</head>
+<body class="w-full h-screen flex flex-col relative">
+
+    <div class="absolute top-0 left-0 right-0 p-4 bg-stone-950/90 border-b border-amber-500/20 flex justify-between items-center z-10 pointer-events-auto">
+        <div>
+            <p class="text-[10px] text-stone-500 uppercase font-bold tracking-widest">Vault Capital</p>
+            <p class="text-xl font-black text-amber-500">$<span id="cash-display">100</span></p>
+            <p class="text-[10px] text-emerald-400 font-bold">+$<span id="income-display">0.0</span>/s</p>
+        </div>
+        <div class="text-right">
+            <p class="text-[10px] text-stone-500 uppercase font-bold tracking-widest">Threat Index</p>
+            <p class="text-sm font-bold text-red-400 font-mono" id="heat-display">0.0%</p>
+            <p class="text-[9px] text-stone-400 uppercase">Walk onto grids to expand</p>
+        </div>
+    </div>
+
+    <canvas id="tycoonCanvas" class="w-full h-full block bg-stone-900"></canvas>
+
+    <div id="joystick-zone" class="absolute bottom-8 left-8 w-28 h-28 bg-stone-950/60 border border-stone-800 rounded-full hidden md:flex items-center justify-center z-10 touch-none">
+        <div id="joystick-handle" class="w-10 h-10 bg-amber-500 rounded-full border border-stone-950 transition-all pointer-events-none shadow-md"></div>
+    </div>
+
+    <script>
+        // SimulationEngine Core Rules Structure mapping back to original assets
+        const SimulationEngine = {
+            calculateIncome: (shops) => {
+                return shops.reduce((total, s) => total + (s.baseIncome * s.owned), 0);
+            },
+            calculateHeatImpact: (shops) => {
+                return shops.reduce((heat, s) => {
+                    let mult = (s.type === 'high-heat') ? 0.02 : 0.005;
+                    return heat + (s.owned * s.baseIncome * mult);
+                }, 0);
+            }
+        };
+
+        // Game State
+        let G = {
+            cash: 100,
+            heat: 0,
+            shops: [
+                { id: 'lemonade', name: 'Lemonade Front', baseIncome: 1, baseCost: 50, owned: 1, type: 'standard', x: 200, y: 300, radius: 45, color: '#f59e0b', emoji: '🍋' },
+                { id: 'toystore', name: 'Toy Store Sub-Vault', baseIncome: 15, baseCost: 250, owned: 0, type: 'high-heat', x: 500, y: 300, radius: 45, color: '#ec4899', emoji: '🧸' }
+            ]
+        };
+
+        // Tycoon Canvas Context Engine Initialization
+        const canvas = document.getElementById('tycoonCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Player Model Config
+        let player = { x: 350, y: 500, size: 14, speed: 4.5 };
+        let input = { x: 0, y: 0 };
+
+        // Handle scaling across viewport dimension resets
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Keyboard Routing Interceptors
+        let keys = {};
+        window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+        function processKeyboard() {
+            input.x = 0; input.y = 0;
+            if (keys['w'] || keys['arrowup']) input.y = -1;
+            if (keys['s'] || keys['arrowdown']) input.y = 1;
+            if (keys['a'] || keys['arrowleft']) input.x = -1;
+            if (keys['d'] || keys['arrowright']) input.x = 1;
+            
+            // Normalize Vector length to prevent diagonal speed spikes
+            if (input.x !== 0 && input.y !== 0) {
+                input.x *= 0.7071; input.y *= 0.7071;
+            }
+        }
+
+        // Touch Interaction Matrix (Mobile Joysticks)
+        const joyZone = document.getElementById('joystick-zone');
+        const joyHandle = document.getElementById('joystick-handle');
+        let touchId = null, joyStart = { x: 0, y: 0 };
+
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            joyZone.classList.remove('hidden');
+            joyZone.classList.add('flex');
+        }
+
+        window.addEventListener('touchstart', e => {
+            if (touchId !== null) return;
+            let t = e.changedTouches[0];
+            let rect = joyZone.getBoundingClientRect();
+            let jcX = rect.left + rect.width / 2;
+            let jcY = rect.top + rect.height / 2;
+            
+            // Allow touching anywhere on left quadrant side to trigger joystick snapping
+            if (t.clientX < window.innerWidth / 2 && t.clientY > window.innerHeight / 3) {
+                touchId = t.identifier;
+                joyStart = { x: jcX, y: jcY };
+            }
+        });
+
+        window.addEventListener('touchmove', e => {
+            if (touchId === null) return;
+            for (let t of e.changedTouches) {
+                if (t.identifier === touchId) {
+                    let dx = t.clientX - joyStart.x;
+                    let dy = t.clientY - joyStart.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    let maxDist = 40;
+                    
+                    if (dist > maxDist) {
+                        dx = (dx / dist) * maxDist;
+                        dy = (dy / dist) * maxDist;
+                    }
+                    
+                    joyHandle.style.transform = `translate(${dx}px, ${dy}px)`;
+                    input.x = dx / maxDist;
+                    input.y = dy / maxDist;
+                }
+            }
+        });
+
+        window.addEventListener('touchend', e => {
+            for (let t of e.changedTouches) {
+                if (t.identifier === touchId) {
+                    touchId = null;
+                    joyHandle.style.transform = 'translate(0px, 0px)';
+                    input.x = 0; input.y = 0;
+                }
+            }
+        });
+
+        // Main Execution Render Loop
+        function loop() {
+            processKeyboard();
+
+            // Run collision update logic
+            player.x += input.x * player.speed;
+            player.y += input.y * player.speed;
+
+            // Clamping bounds check boundaries
+            player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
+            player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
+
+            // Core Math Tick Integrations
+            let incomeRate = SimulationEngine.calculateIncome(G.shops);
+            let heatRate = SimulationEngine.calculateHeatImpact(G.shops);
+
+            G.cash += incomeRate / 60;
+            G.heat = Math.max(0, Math.min(100, G.heat + ((heatRate - 0.05) / 60)));
+
+            // Update DOM Overlays
+            document.getElementById('cash-display').innerText = Math.floor(G.cash);
+            document.getElementById('income-display').innerText = incomeRate.toFixed(1);
+            document.getElementById('heat-display').innerText = G.heat.toFixed(1) + '%';
+
+            // Clear Screen 
+            ctx.fillStyle = '#14100a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Blueprint Grid Pattern Lines
+            ctx.strokeStyle = '#221a10';
+            ctx.lineWidth = 1;
+            const grid = 40;
+            for(let x=0; x<canvas.width; x+=grid) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
+            for(let y=0; y<canvas.height; y+=grid) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
+
+            // Draw desk asset nodes
+            G.shops.forEach(s => {
+                let currentCost = Math.floor(s.baseCost * Math.pow(1.3, s.owned));
+                
+                // Distance checking intersection vectors
+                let dx = player.x - s.x;
+                let dy = player.y - s.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                let isInside = dist < (s.radius + player.size);
+
+                // Auto transactional trigger buy execution state logic
+                if (isInside && G.cash >= currentCost) {
+                    G.cash -= currentCost;
+                    s.owned++;
+                    player.y += 25; // Simple knockback displacement bounce so player doesn't accidentally buy repeatedly
+                }
+
+                // Node Base Desk Ring Rendering
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius, 0, Math.PI*2);
+                ctx.fillStyle = s.owned > 0 ? '#1f1a12' : '#140e08';
+                ctx.fill();
+                ctx.strokeStyle = isInside ? '#f59e0b' : (s.owned > 0 ? '#443722' : '#331111');
+                ctx.lineWidth = isInside ? 3 : 2;
+                ctx.stroke();
+
+                // Zone Asset Details text layouts
+                ctx.fillStyle = '#e7dba7';
+                ctx.font = 'bold 11px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${s.emoji} ${s.name}`, s.x, s.y - 12);
+
+                ctx.font = '10px monospace';
+                ctx.fillStyle = '#8c7653';
+                ctx.fillText(`Level: ${s.owned}`, s.x, s.y + 6);
+                
+                ctx.fillStyle = G.cash >= currentCost ? '#10b981' : '#ef4444';
+                ctx.fillText(s.owned > 0 ? `Upgrade: $${currentCost}` : `Unlock: $${currentCost}`, s.x, s.y + 20);
+            });
+
+            // Draw player token avatar
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.size, 0, Math.PI*2);
+            ctx.fillStyle = '#f59e0b';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            requestAnimationFrame(loop);
+        }
+
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
