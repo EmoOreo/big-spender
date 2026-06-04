@@ -2,235 +2,69 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Big Spender: Director's Cut</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Big Spender: Idle Tycoon</title>
 <style>
-/* CSS remains as previously provided */
+    body { background: #0d0a05; color: #f5e9c8; font-family: sans-serif; }
+    #hud { display: flex; gap: 20px; padding: 20px; background: #1a1409; }
+    .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .item { border: 1px solid #f7c325; padding: 10px; cursor: pointer; }
 </style>
 </head>
 <body>
-<script>
-// --- CORE UPGRADED ENGINE ---
-const WW=2400,WH=2400,SPD=240,SPRINT_M=1.9,BUDGET=1_000_000;
-// ... (Keep your existing SHOPS array)
+    <div id="hud">
+        <div>Cash: <span id="cash">$0</span></div>
+        <div>Income: <span id="income">$0/sec</span></div>
+        <div>Heat: <span id="heat">0%</span></div>
+    </div>
+    <div class="shop-grid" id="shop"></div>
 
-// 1. IMPROVED FBI AI (The Hunter)
-// Agents now use a persistent target-seeking vector rather than fixed paths.
-function updateFBI(dt) {
-    G.fbi.forEach(f => {
-        const dist = Math.hypot(G.player.x - f.x, G.player.y - f.y);
-        if (dist < 800) { // Detection range
-            f.vx += (G.player.x - f.x) / dist * f.spd * dt;
-            f.vy += (G.player.y - f.y) / dist * f.spd * dt;
-        }
-        f.x += f.vx * dt;
-        f.y += f.vy * dt;
-        f.vx *= 0.92; // Friction for snappy movement
-        f.vy *= 0.92;
-        if (dist < 40) bustGame(); // End condition
-    });
+<script>
+let G = { cash: 100, heat: 0, shops: [
+    { name: 'Lemonade Stand', cost: 10, income: 1, owned: 0 },
+    { name: 'Toy Store', cost: 100, income: 5, owned: 0 },
+    { name: 'Real Estate', cost: 1000, income: 50, owned: 0 }
+]};
+
+function update() {
+    let incomePerSec = 0;
+    G.shops.forEach(s => incomePerSec += (s.income * s.owned));
+    G.cash += incomePerSec / 60;
+    G.heat = Math.min(100, G.heat + (incomePerSec * 0.0001)); // Heat scales with income
+    
+    document.getElementById('cash').innerText = '$' + Math.floor(G.cash);
+    document.getElementById('income').innerText = '$' + incomePerSec + '/sec';
+    document.getElementById('heat').innerText = Math.floor(G.heat) + '%';
+    if(G.heat >= 100) alert("BUSTED! Prestige reset incoming.");
 }
 
-// 2. JUICE & PARTICLE PHYSICS
-// Every purchase triggers a "Cash Out" particle effect
-function triggerPurchaseJuice() {
-    for(let i=0; i<15; i++) {
-        G.parts.push({
-            x: G.player.x, y: G.player.y,
-            vx: (Math.random() - .5) * 400,
-            vy: -Math.random() * 500,
-            life: 1.5, col: '#f7c325'
-        });
+function buy(idx) {
+    let s = G.shops[idx];
+    if (G.cash >= s.cost) {
+        G.cash -= s.cost;
+        s.owned++;
+        s.cost = Math.floor(s.cost * 1.15);
+        renderShop();
     }
 }
 
-// 3. GAMEPLAY ESCALATION
-// The world gets more dangerous as days pass
-function nextDay() {
-    G.day++;
-    G.heat = Math.max(0, G.heat - 25);
-    // Increase FBI speed/count per day
-    G.fbi.forEach(f => f.spd += 20); 
-    spawnFBI(); 
-    updateHUD();
-    closeShop();
+function renderShop() {
+    const shopDiv = document.getElementById('shop');
+    shopDiv.innerHTML = '';
+    G.shops.forEach((s, i) => {
+        shopDiv.innerHTML += `<div class="item" onclick="buy(${i})">
+            <h3>${s.name}</h3>
+            <p>Cost: $${s.cost} | Owned: ${s.owned}</p>
+        </div>`;
+    });
 }
 
-// 4. CAMERA POLISH (Snappy responsiveness)
-function updateCamera(dt) {
-    G.cam.x += (G.player.x - W/2 - G.cam.x) * 0.15;
-    G.cam.y += (G.player.y - H/2 - G.cam.y) * 0.15;
-}
-
-// ... (Rest of your game loop logic)
+renderShop();
+setInterval(update, 1000/60);
 </script>
 </body>
 </html>
-var(--gold)">$1,000,000</strong>. Spend it ALL in 7 days before the Feds catch you. 🕵️</p>
-  <div style="display:flex;gap:.75rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem;">
-    <button class="btn btn-gold" onclick="startGame()">💰 Cash It In</button>
-    <button class="btn btn-sec btn-sm" onclick="showHelp()">How to Play</button>
-  </div>
-  <p style="font-size:.72rem;color:var(--muted);margin-top:.5rem;">Inspired by the 1994 film "Blank Check"</p>
-</div>
-
-<!-- HELP -->
-<div class="screen hidden" id="help-screen">
-  <h2 style="font-family:'Bangers',cursive;font-size:2.2rem;color:var(--gold);">How to Play</h2>
-  <div class="helpbox">
-    <p>🎯 <strong>Goal:</strong> Spend your entire $1,000,000 within 7 days.</p>
-    <p>🕹️ <strong>Move (mobile):</strong> Drag the left joystick in the bottom bar.</p>
-    <p>⌨️ <strong>Move (desktop):</strong> WASD or Arrow Keys.</p>
-    <p>⚡ <strong>Sprint:</strong> Hold SPRINT button or <kbd>Shift</kbd> for a speed boost.</p>
-    <p>🛒 <strong>Shop:</strong> Walk near a store — SHOP button glows gold. Tap it or press <kbd>E</kbd>.</p>
-    <p>🗺️ <strong>Map:</strong> Toggle the MAP button to show/hide minimap.</p>
-    <p>🌡️ <strong>Heat:</strong> Big purchases raise FBI suspicion. 100% = busted!</p>
-    <p>🌙 <strong>End Day:</strong> Go to Mansion 🏰 (far bottom-right) and Sleep.</p>
-    <p>💸 <strong>Win:</strong> Drain the account before day 7 ends!</p>
-  </div>
-  <button class="btn btn-gold btn-sm" onclick="hideHelp()">Got It! 👍</button>
-</div>
-
-<!-- HUD -->
-<div id="hud" style="display:none;">
-  <div class="hi"><span class="hl">Balance</span><span class="hv gold" id="h-money">$1,000,000</span></div>
-  <div class="hsep"></div>
-  <div class="hi"><span class="hl">Day</span><span class="hv" id="h-day">1/7</span></div>
-  <div class="hsep"></div>
-  <div class="heatw">
-    <span class="hl">Heat <span id="h-hpct" style="color:var(--danger)">0%</span></span>
-    <div class="heatbar"><div class="heatfill" id="h-hfill" style="width:0%"></div></div>
-  </div>
-  <div class="hsep"></div>
-  <div class="hi" id="h-spent-wrap">
-    <span class="hl">Spent</span>
-    <span class="hv" style="color:var(--success)" id="h-spent">$0</span>
-  </div>
-</div>
-
-<!-- GAME -->
-<div class="screen hidden" id="game-screen">
-  <canvas id="cv"></canvas>
-</div>
-
-<!-- CONTROL BAR -->
-<div id="cbar">
-  <div id="joy-zone">
-    <div id="joy-base">
-      <div id="joy-nub"></div>
-      <div id="joy-lbl">MOVE</div>
-    </div>
-  </div>
-  <div id="cb-div"></div>
-  <div id="act-zone">
-    <button class="ab far" id="ab-shop" onclick="tryOpenShop()">
-      <span class="ai">🛒</span><span class="al">SHOP</span>
-    </button>
-    <button class="ab" id="ab-sprint">
-      <span class="ai">⚡</span><span class="al">SPRINT</span>
-    </button>
-    <button class="ab on" id="ab-map" onclick="toggleMap()">
-      <span class="ai">🗺️</span><span class="al">MAP</span>
-    </button>
-  </div>
-</div>
-
-<!-- SHOP MODAL -->
-<div id="shop-modal" class="hidden" onclick="closeBg(event)">
-  <div class="sp">
-    <div class="sp-hd">
-      <span class="sp-title" id="sh-name">🏪 Shop</span>
-      <button class="sp-close" onclick="closeShop()">✕</button>
-    </div>
-    <div class="sgrid" id="sh-grid"></div>
-  </div>
-</div>
-
-<div id="toast"></div>
-
-<!-- END SCREEN -->
-<div class="screen hidden" id="end-screen">
-  <div class="et" id="end-title">BUSTED! 🚔</div>
-  <p class="es" id="end-sub"></p>
-  <div class="estats" id="end-stats"></div>
-  <button class="btn btn-gold" onclick="restartGame()" style="margin-top:.5rem;">🔄 Try Again</button>
-</div>
-
-<script>
-const WW=2400,WH=2400,TILE=48,SPD=215,SPRINT_M=1.85,BUDGET=1_000_000,DAYS=7,NUB_MAX=42;
-const SHOPS=[
-  {id:'toy',name:'🧸 Toy Bonanza',emoji:'🧸',col:'#e05c9a',x:300,y:280,w:160,h:120,items:[
-    {name:'RC Car',em:'🚗',cost:250,heat:1,desc:'Vroom vroom!'},
-    {name:'Game Console',em:'🎮',cost:600,heat:2,desc:'Latest gen'},
-    {name:'Arcade Machine',em:'🕹️',cost:8500,heat:5,desc:'Full-size cab'},
-    {name:'Whole Shelf',em:'🧸',cost:12000,heat:8,desc:'Clear an entire shelf'},
-    {name:'Giant Trampoline',em:'🤸',cost:3200,heat:3,desc:'Backyard bouncer'},
-  ]},
-  {id:'mansion',name:'🏰 Blakeman Estate',emoji:'🏰',col:'#9b59b6',x:WW-500,y:WH-500,w:200,h:180,items:[
-    {name:'Sleep (End Day)',em:'🌙',cost:0,heat:-20,desc:'Rest & lower heat.',special:'sleep'},
-  ]},
-  {id:'car',name:'🚗 Luxury Auto',emoji:'🚗',col:'#e74c3c',x:800,y:200,w:160,h:120,items:[
-    {name:'Sports Car',em:'🏎️',cost:85000,heat:15,desc:'0-60 in 3.2s'},
-    {name:'Limo',em:'🚌',cost:2500,heat:4,desc:'Chauffeur included'},
-    {name:'Monster Truck',em:'🚛',cost:120000,heat:20,desc:'Crushes everything'},
-    {name:'Helicopter',em:'🚁',cost:350000,heat:35,desc:'Personal chopper'},
-    {name:'Private Jet',em:'✈️',cost:480000,heat:40,desc:'Your own 747'},
-  ]},
-  {id:'food',name:'🍕 Gourmet Palace',emoji:'🍕',col:'#e67e22',x:400,y:900,w:150,h:110,items:[
-    {name:'Pizza Party',em:'🍕',cost:150,heat:0,desc:'20 large pizzas'},
-    {name:'Catered Feast',em:'🍽️',cost:5000,heat:3,desc:'5-star chef'},
-    {name:'Candy Mountain',em:'🍬',cost:2000,heat:2,desc:'Literal candy mountain'},
-    {name:'Ice Cream Truck',em:'🍦',cost:8000,heat:4,desc:'Buy the whole truck'},
-    {name:'5-Star Restaurant',em:'⭐',cost:25000,heat:6,desc:'Rent for a night'},
-  ]},
-  {id:'water',name:'🏊 Water World',emoji:'🌊',col:'#3498db',x:1200,y:600,w:180,h:130,items:[
-    {name:'Waterslide',em:'🌊',cost:45000,heat:10,desc:'Personal backyard slide'},
-    {name:'Pool Party',em:'🏊',cost:8000,heat:4,desc:'Full event with DJ'},
-    {name:'Speedboat',em:'⛵',cost:95000,heat:14,desc:'32-foot racing boat'},
-    {name:'Private Island',em:'🏝️',cost:200000,heat:18,desc:'Rent a whole island'},
-    {name:'Submarine',em:'🤿',cost:500000,heat:45,desc:'Personal yellow sub'},
-  ]},
-  {id:'bling',name:'💍 Bling & Things',emoji:'💍',col:'#f1c40f',x:1600,y:300,w:150,h:110,items:[
-    {name:'Designer Shoes',em:'👟',cost:1200,heat:2,desc:'Limited edition kicks'},
-    {name:'Gold Chain',em:'📿',cost:15000,heat:5,desc:'24-karat, 2 lbs'},
-    {name:'Diamond Watch',em:'⌚',cost:80000,heat:12,desc:'Bling on wrist'},
-    {name:'Custom Suit',em:'🤵',cost:6000,heat:3,desc:'Hand-tailored'},
-    {name:'Crown',em:'👑',cost:150000,heat:20,desc:'Real gold & jewels'},
-  ]},
-  {id:'rides',name:'🎡 Funland',emoji:'🎡',col:'#2ecc71',x:900,y:1400,w:170,h:130,items:[
-    {name:'Carnival Ticket',em:'🎟️',cost:500,heat:1,desc:'Ride all day'},
-    {name:'Ferris Wheel',em:'🎡',cost:30000,heat:8,desc:'All yours for a day'},
-    {name:'Rollercoaster',em:'🎢',cost:50000,heat:10,desc:'Private run'},
-    {name:'Theme Park',em:'🎠',cost:75000,heat:12,desc:'Rent the whole park'},
-  ]},
-  {id:'realty',name:'🏠 Real Estate',emoji:'🏠',col:'#8e44ad',x:1700,y:1000,w:170,h:140,items:[
-    {name:'Mansion',em:'🏰',cost:500000,heat:38,desc:'7 beds, pool, helipad'},
-    {name:'Beach House',em:'🏖️',cost:250000,heat:22,desc:'Prime oceanfront'},
-    {name:'Penthouse',em:'🌆',cost:180000,heat:16,desc:'Top floor, city views'},
-    {name:'Castle (EU)',em:'🏯',cost:750000,heat:50,desc:'Medieval, renovated'},
-  ]},
-];
-
-let G=null;
-function newState(){return{phase:'title',money:BUDGET,spent:0,day:1,heat:0,items:0,
-  player:{x:600,y:600,af:0,at:0},joy:{on:false,tid:-1,sx:0,sy:0,dx:0,dy:0},
-  sprint:false,showMap:true,cam:{x:0,y:0},fbi:[],parts:[],
-  nearShop:null,dayFlash:0,heatWarn:0,keys:{},_lheat:-1};}
-
-const cv=document.getElementById('cv');
-const cx=cv.getContext('2d');
-let W,H,CBH=0;
-function resize(){CBH=isTouchDevice?document.getElementById('cbar').offsetHeight:0;W=cv.width=window.innerWidth;H=cv.height=window.innerHeight;}
-window.addEventListener('resize',()=>setTimeout(resize,80));
-
-let isTouchDevice=false;
-window.addEventListener('touchstart',()=>{
-  if(!isTouchDevice){isTouchDevice=true;document.getElementById('cbar').style.display='flex';document.getElementById('h-spent-wrap').style.display='none';setTimeout(resize,60);}
-},{passive:true});
-
-document.addEventListener('keydown',e=>{
-  if(!G)return;G.keys[e.code]=true;
-  if(e.code==='KeyE'&&G.phase==='playing')tryOpenShop();
+aying')tryOpenShop();
   if(e.code==='Escape'&&G.phase==='shop')closeShop();
   if(['ShiftLeft','ShiftRight'].includes(e.code))G.sprint=true;
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','KeyE'].includes(e.code))e.preventDefault();
