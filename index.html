@@ -1,143 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Big Spender: Idle Tycoon</title>
-<style>
-    body { background: #0d0a05; color: #f5e9c8; font-family: sans-serif; }
-    #hud { display: flex; gap: 20px; padding: 20px; background: #1a1409; }
-    .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-    .item { border: 1px solid #f7c325; padding: 10px; cursor: pointer; }
-</style>
+    <meta charset="UTF-8">
+    <title>Big Spender: Idle Tycoon</title>
+    <style>
+        body { background: #0d0a05; color: #f5e9c8; font-family: monospace; }
+        #hud { background: #1a1409; padding: 15px; border-bottom: 2px solid #f7c325; }
+    </style>
 </head>
 <body>
     <div id="hud">
-        <div>Cash: <span id="cash">$0</span></div>
-        <div>Income: <span id="income">$0/sec</span></div>
-        <div>Heat: <span id="heat">0%</span></div>
+        Cash: $<span id="cash">100</span> | Income: $<span id="income">0</span>/s | Heat: <span id="heat">0%</span>
     </div>
-    <div class="shop-grid" id="shop"></div>
+    <div id="shop"></div>
 
-<script>
-let G = { cash: 100, heat: 0, shops: [
-    { name: 'Lemonade Stand', cost: 10, income: 1, owned: 0 },
-    { name: 'Toy Store', cost: 100, income: 5, owned: 0 },
-    { name: 'Real Estate', cost: 1000, income: 50, owned: 0 }
-]};
+    <script src="SimulationEngine.js"></script>
+    <script>
+        let G = {
+            cash: 100, heat: 0,
+            strains: { efficiency: 1.0, stealth: 1.0, aggressivity: 1.0 },
+            shops: [
+                { name: 'Lemonade Stand', baseIncome: 1, owned: 0, type: 'standard' },
+                { name: 'Toy Store', baseIncome: 10, owned: 0, type: 'high-heat' }
+            ]
+        };
 
-function update() {
-    let incomePerSec = 0;
-    G.shops.forEach(s => incomePerSec += (s.income * s.owned));
-    G.cash += incomePerSec / 60;
-    G.heat = Math.min(100, G.heat + (incomePerSec * 0.0001)); // Heat scales with income
-    
-    document.getElementById('cash').innerText = '$' + Math.floor(G.cash);
-    document.getElementById('income').innerText = '$' + incomePerSec + '/sec';
-    document.getElementById('heat').innerText = Math.floor(G.heat) + '%';
-    if(G.heat >= 100) alert("BUSTED! Prestige reset incoming.");
-}
+        function gameLoop() {
+            let inc = SimulationEngine.calculateIncome(G.shops, G.strains);
+            let heatInc = SimulationEngine.calculateHeatImpact(G.shops, G.strains);
+            
+            G.cash += inc / 60;
+            G.heat = Math.min(100, G.heat + (heatInc / 60));
 
-function buy(idx) {
-    let s = G.shops[idx];
-    if (G.cash >= s.cost) {
-        G.cash -= s.cost;
-        s.owned++;
-        s.cost = Math.floor(s.cost * 1.15);
-        renderShop();
-    }
-}
+            document.getElementById('cash').innerText = Math.floor(G.cash);
+            document.getElementById('income').innerText = inc.toFixed(1);
+            document.getElementById('heat').innerText = G.heat.toFixed(1) + '%';
+            
+            if(G.heat >= 100) { /* Trigger Prestige/Reset Logic */ }
+        }
 
-function renderShop() {
-    const shopDiv = document.getElementById('shop');
-    shopDiv.innerHTML = '';
-    G.shops.forEach((s, i) => {
-        shopDiv.innerHTML += `<div class="item" onclick="buy(${i})">
-            <h3>${s.name}</h3>
-            <p>Cost: $${s.cost} | Owned: ${s.owned}</p>
-        </div>`;
-    });
-}
-
-renderShop();
-setInterval(update, 1000/60);
-</script>
+        setInterval(gameLoop, 1000/60);
+    </script>
 </body>
 </html>
-aying')tryOpenShop();
-  if(e.code==='Escape'&&G.phase==='shop')closeShop();
-  if(['ShiftLeft','ShiftRight'].includes(e.code))G.sprint=true;
-  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','KeyE'].includes(e.code))e.preventDefault();
-});
-document.addEventListener('keyup',e=>{if(!G)return;G.keys[e.code]=false;if(['ShiftLeft','ShiftRight'].includes(e.code))G.sprint=false;});
-
-const jZone=document.getElementById('joy-zone'),jBase=document.getElementById('joy-base'),jNub=document.getElementById('joy-nub');
-function jStart(e){if(!G||G.phase!=='playing')return;const t=e.changedTouches[0];if(G.joy.on)return;G.joy.on=true;G.joy.tid=t.identifier;const r=jBase.getBoundingClientRect();G.joy.sx=r.left+r.width/2;G.joy.sy=r.top+r.height/2;jMove2(t);e.preventDefault();}
-function jMov(e){if(!G||!G.joy.on)return;for(const t of e.changedTouches)if(t.identifier===G.joy.tid){jMove2(t);break;}e.preventDefault();}
-function jEnd(e){if(!G)return;for(const t of e.changedTouches){if(t.identifier===G.joy.tid){G.joy.on=false;G.joy.dx=0;G.joy.dy=0;jNub.style.transform='translate(-50%,-50%)';break;}}}
-function jMove2(t){const rdx=t.clientX-G.joy.sx,rdy=t.clientY-G.joy.sy,d=Math.sqrt(rdx*rdx+rdy*rdy),a=Math.atan2(rdy,rdx),c=Math.min(d,NUB_MAX),sx=Math.cos(a)*c,sy=Math.sin(a)*c;G.joy.dx=sx/NUB_MAX;G.joy.dy=sy/NUB_MAX;jNub.style.transform=`translate(calc(-50% + ${sx}px),calc(-50% + ${sy}px))`;}
-jZone.addEventListener('touchstart',jStart,{passive:false});jZone.addEventListener('touchmove',jMov,{passive:false});jZone.addEventListener('touchend',jEnd,{passive:false});jZone.addEventListener('touchcancel',jEnd,{passive:false});
-
-const abSprint=document.getElementById('ab-sprint');
-abSprint.addEventListener('touchstart',e=>{if(G)G.sprint=true;e.preventDefault();},{passive:false});
-abSprint.addEventListener('touchend',()=>{if(G)G.sprint=false;abSprint.classList.remove('sprinting');});
-abSprint.addEventListener('touchcancel',()=>{if(G)G.sprint=false;abSprint.classList.remove('sprinting');});
-
-function toggleMap(){if(!G)return;G.showMap=!G.showMap;document.getElementById('ab-map').className='ab'+(G.showMap?' on':'');}
-
-function startGame(){G=newState();G.phase='playing';spawnFBI();
-  document.getElementById('title-screen').classList.add('hidden');
-  document.getElementById('game-screen').classList.remove('hidden');
-  document.getElementById('hud').style.display='flex';
-  if(isTouchDevice)document.getElementById('cbar').style.display='flex';
-  setTimeout(resize,50);updateHUD();
-  toast('💰 $1,000,000 deposited! Spend it ALL!','tgold',3000);gameLoop();}
-
-function restartGame(){
-  document.getElementById('end-screen').classList.remove('win');
-  document.getElementById('end-screen').classList.add('hidden');
-  document.getElementById('hud').style.display='none';
-  document.getElementById('game-screen').classList.add('hidden');
-  document.getElementById('cbar').style.display='none';
-  document.getElementById('title-screen').classList.remove('hidden');
-  CBH=0;G=null;}
-
-function showHelp(){document.getElementById('help-screen').classList.remove('hidden');}
-function hideHelp(){document.getElementById('help-screen').classList.add('hidden');}
-
-function spawnFBI(){G.fbi=[];const n=Math.min(1+Math.floor(G.day/2),4);for(let i=0;i<n;i++)G.fbi.push({x:Math.random()*WW,y:Math.random()*WH,vx:0,vy:0,spd:60,alert:false,atimer:0});}
-
-function tryOpenShop(){if(!G||G.phase!=='playing')return;const p=G.player;for(const s of SHOPS){const dx=p.x-(s.x+s.w/2),dy=p.y-(s.y+s.h/2);if(Math.abs(dx)<s.w/2+68&&Math.abs(dy)<s.h/2+68){openShop(s);return;}}toast('Walk closer to a store first!','tdanger',1500);}
-
-function openShop(s){G.phase='shop';document.getElementById('sh-name').textContent=s.name;const grid=document.getElementById('sh-grid');grid.innerHTML='';
-  for(const it of s.items){const ok=G.money>=it.cost||it.cost===0;const el=document.createElement('div');el.className='si'+(ok?'':' broke');
-    el.innerHTML=`<div class="si-em">${it.em}</div><div class="si-nm">${it.name}</div><div class="si-ds">${it.desc}</div><div class="si-pr">${it.cost===0?'Free':'$'+it.cost.toLocaleString()}</div>${it.heat>0?`<div class="si-ht">🌡️ +${it.heat}% Heat</div>`:''}${it.heat<0?`<div class="si-cl">❄️ ${it.heat}% Heat</div>`:''}`;
-    if(ok)el.addEventListener('click',()=>buy(it));grid.appendChild(el);}
-  document.getElementById('shop-modal').classList.remove('hidden');}
-
-function closeBg(e){if(e.target===document.getElementById('shop-modal'))closeShop();}
-function closeShop(){document.getElementById('shop-modal').classList.add('hidden');if(G)G.phase='playing';}
-
-function buy(it){if(G.money<it.cost&&it.cost>0)return;if(it.special==='sleep'){closeShop();nextDay();return;}
-  G.money-=it.cost;G.spent+=it.cost;G.heat=Math.min(100,Math.max(0,G.heat+it.heat));G.items++;
-  for(let i=0;i<12;i++)G.parts.push({x:G.player.x,y:G.player.y,vx:(Math.random()-.5)*180,vy:-Math.random()*280-40,life:1.4,ml:1.4,col:['#f7c325','#ffea00','#fff176'][i%3],txt:i===0?`💸 -$${it.cost.toLocaleString()}`:'💰',sz:i===0?15:11});
-  for(const f of G.fbi)f.spd=60+G.heat*1.2;
-  updateHUD();closeShop();
-  if(G.money<=0)setTimeout(winGame,500);else if(G.heat>=100)setTimeout(bustGame,800);else toast(`${it.em} Bought ${it.name}!`,'tgold',2000);}
-
-function nextDay(){G.day++;G.heat=Math.max(0,G.heat-20);G.heatWarn=0;spawnFBI();G.dayFlash=2;updateHUD();if(G.day>DAYS&&G.money>0)timeOut();else toast(`🌅 Day ${G.day} begins! Heat cooled.`,'tok',3000);}
-
-function endCleanup(){G.phase='gameover';document.getElementById('shop-modal').classList.add('hidden');document.getElementById('cbar').style.display='none';document.getElementById('hud').style.display='none';}
-function stat(v,l){return`<div class="ebox"><div class="ev">${v}</div><div class="el">${l}</div></div>`;}
-
-function winGame(){endCleanup();const sc=document.getElementById('end-screen');sc.classList.remove('hidden');sc.classList.add('win');document.getElementById('end-title').innerHTML='🎉 YOU DID IT!';document.getElementById('end-title').style.color='var(--gold)';document.getElementById('end-sub').textContent=`You spent the entire million in ${G.day} day${G.day!==1?'s':''}!`;document.getElementById('end-stats').innerHTML=stat(G.day,'Days Used')+stat(G.items,'Items Bought')+stat(Math.round(G.heat)+'%','Final Heat');}
-function bustGame(){endCleanup();document.getElementById('end-screen').classList.remove('hidden');document.getElementById('end-title').innerHTML='🚔 BUSTED!';document.getElementById('end-title').style.color='var(--danger)';document.getElementById('end-sub').textContent=`FBI tracked your spending. $${G.money.toLocaleString()} left unspent!`;document.getElementById('end-stats').innerHTML=stat('$'+G.spent.toLocaleString(),'Spent')+stat('$'+G.money.toLocaleString(),'Remaining')+stat(G.day,'Days Survived');}
-function timeOut(){endCleanup();document.getElementById('end-screen').classList.remove('hidden');document.getElementById('end-title').innerHTML='⏰ TIME\'S UP!';document.getElementById('end-title').style.color='#e67e22';document.getElementById('end-sub').textContent=`7 days passed with $${G.money.toLocaleString()} still left. Check expired!`;document.getElementById('end-stats').innerHTML=stat('$'+G.spent.toLocaleString(),'Spent')+stat('$'+G.money.toLocaleString(),'Not Spent')+stat(G.items,'Items Bought');}
-
-function updateHUD(){document.getElementById('h-money').textContent='$'+G.money.toLocaleString();document.getElementById('h-day').textContent=G.day+'/'+DAYS;document.getElementById('h-spent').textContent='$'+G.spent.toLocaleString();document.getElementById('h-hpct').textContent=Math.round(G.heat)+'%';document.getElementById('h-hfill').style.width=G.heat+'%';}
-
-let _tt=null;
-function toast(msg,type='tgold',dur=2000){const el=document.getElementById('toast');el.textContent=msg;el.className='show '+type;if(_tt)clearTimeout(_tt);_tt=setTimeout(()=>el.className=type,dur);}
+=type,dur);}
 
 function drawWorld(){const cam=G.cam,pH=H-CBH;cx.fillStyle='#1a2e0e';cx.fillRect(0,0,W,H);
   cx.strokeStyle='rgba(255,255,255,.03)';cx.lineWidth=1;
