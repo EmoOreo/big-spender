@@ -2,83 +2,481 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Big Spender: Volatility Cycle</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background: #0d0a05; color: #f5e9c8; font-family: monospace; transition: background 0.5s; }
-        #hud { background: #1a1409; padding: 15px; border-bottom: 2px solid #f7c325; }
-        .critical { background: #3d0a0a !important; }
-        .item { border: 1px solid #f7c325; margin: 10px; padding: 10px; cursor: pointer; }
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background-color: #080705;
+        }
+        .text-glow-gold {
+            text-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+        }
+        .text-glow-red {
+            text-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+        }
+        /* Custom scrollbar for terminal/cyber deck look */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #d97706; border-radius: 3px; }
+        
+        /* Floating Text Animations */
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-100px) scale(0.8); }
+        }
+        .floating-text {
+            position: absolute;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+            font-weight: bold;
+            z-index: 50;
+        }
+        /* Alarm/Critical pulse */
+        @keyframes emergencyPulse {
+            0%, 100% { background-color: #080705; }
+            50% { background-color: #2b0707; }
+        }
+        .bg-critical-pulse {
+            animation: emergencyPulse 1.5s infinite;
+        }
     </style>
 </head>
-<body>
-    <div id="hud">
-        Cash: $<span id="cash">100</span> | Income: $<span id="income">0</span>/s | Heat: <span id="heat">0%</span>
-        <br>
-        Status: <span id="audit-status">STABLE</span>
-        <button id="hide-btn" style="display:none;">HIDE OPERATIONS</button>
-    </div>
-    <div id="shop"></div>
+<body class="text-stone-300 min-h-screen flex flex-col transition-colors duration-500 selection:bg-amber-500 selection:text-black">
 
-    <script src="SimulationEngine.js"></script>
+    <div id="hud" class="bg-stone-950 border-b border-amber-500/30 p-4 sticky top-0 z-40 backdrop-blur-md bg-opacity-95">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-6">
+                <div>
+                    <p class="text-xs text-stone-500 uppercase tracking-widest font-bold">Liquid Capital</p>
+                    <p class="text-2xl md:text-3xl font-black text-amber-500 text-glow-gold" id="hud-cash">$0.00</p>
+                    <p class="text-xs text-stone-400">Net Flow: <span class="text-emerald-500 font-bold" id="hud-income">+$0.00</span>/s</p>
+                </div>
+                <div class="border-l border-stone-800 h-10 hidden sm:block"></div>
+                <div class="hidden sm:block">
+                    <p class="text-xs text-stone-500 uppercase tracking-widest font-bold">Clean Reputation</p>
+                    <p class="text-lg font-bold text-cyan-400" id="hud-influence">0 Rep</p>
+                    <p class="text-xs text-stone-400">Bonus: <span class="text-cyan-400" id="hud-rep-bonus">+0%</span> Multiplier</p>
+                </div>
+            </div>
+
+            <div class="w-full md:w-1/3 bg-stone-900/50 p-2 rounded border border-stone-800">
+                <div class="flex justify-between text-xs font-bold mb-1 px-1">
+                    <span class="tracking-wider text-stone-400">HEAT INDEX MONITOR:</span>
+                    <span id="hud-heat-text" class="text-stone-300">0.0%</span>
+                </div>
+                <div class="w-full bg-stone-950 rounded-full h-3 p-0.5 border border-stone-800 overflow-hidden">
+                    <div id="hud-heat-bar" class="bg-gradient-to-r from-emerald-500 via-amber-500 to-red-600 h-full rounded-full transition-all duration-100" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-between items-center mt-1.5 px-1">
+                    <div class="text-xs font-bold flex items-center gap-1.5">
+                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500" id="status-dot"></span>
+                        <span id="hud-status" class="tracking-widest uppercase text-emerald-400">STABLE</span>
+                    </div>
+                    <button id="hide-btn" class="hidden text-xs bg-red-950 border border-red-500 text-red-200 px-3 py-0.5 rounded font-bold uppercase tracking-wider hover:bg-red-900 active:scale-95 transition-all cursor-pointer">
+                        MOTHBALL OPS
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow">
+        
+        <div class="lg:col-span-4 flex flex-col gap-4">
+            <div class="bg-stone-950 border border-stone-850 p-6 rounded relative flex flex-col justify-between items-center text-center overflow-hidden h-[340px] shadow-xl group">
+                <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(217,119,6,0.05),transparent_70%)] pointer-events-none"></div>
+                
+                <div>
+                    <h3 class="text-stone-400 font-bold uppercase tracking-widest text-sm mb-1">Central Funding Matrix</h3>
+                    <p class="text-xs text-stone-500 max-w-xs">Inject raw capital manually. Generates instant liquidity, but spikes immediate, localized heat arrays.</p>
+                </div>
+
+                <div id="money-clicker" class="w-40 h-40 bg-gradient-to-b from-stone-900 to-stone-950 rounded-full border-2 border-amber-500/40 flex flex-col items-center justify-center cursor-pointer shadow-[0_0_20px_rgba(0,0,0,0.8)] hover:border-amber-400 active:scale-95 transition-all relative group select-none select-none">
+                    <div class="absolute inset-2 border border-dashed border-amber-500/10 rounded-full group-hover:border-amber-500/20 transition-colors"></div>
+                    <i class="fa-solid fa-briefcase text-4xl text-amber-500 group-hover:scale-110 group-hover:text-amber-400 transition-all duration-200"></i>
+                    <span class="text-[10px] uppercase font-bold tracking-widest text-stone-500 mt-2 group-hover:text-stone-300">LAUNDER CASH</span>
+                </div>
+
+                <div class="w-full text-xs text-stone-500 flex justify-between px-2">
+                    <span>Manual: <b class="text-stone-300" id="stat-click-val">+$1</b></span>
+                    <span>Heat Multiplier: <b class="text-stone-300" id="stat-strain-eff">1.0x</b></span>
+                </div>
+            </div>
+
+            <div class="bg-stone-950 border border-stone-850 p-4 rounded text-xs flex flex-col gap-2">
+                <div class="border-b border-stone-800 pb-1.5 font-bold uppercase tracking-wider text-amber-500 flex justify-between">
+                    <span><i class="fa-solid fa-chart-line mr-1.5"></i>Operation Telemetry</span>
+                    <span class="text-stone-500" id="stat-time">00:00:00</span>
+                </div>
+                <div class="flex justify-between"><span>Total Accumulation:</span><span id="stat-total-cash" class="font-bold text-stone-300">$0</span></div>
+                <div class="flex justify-between"><span>Capital Cleansed:</span><span id="stat-total-prestige" class="font-bold text-cyan-400">0</span></div>
+                <div class="flex justify-between"><span>Regulatory Audits Survied:</span><span id="stat-total-raids" class="font-bold text-red-400">0</span></div>
+                <div class="flex justify-between"><span>Current Base Strain Multiplier:</span><span id="stat-strain-val" class="font-bold text-purple-400">1.00x</span></div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-8 flex flex-col">
+            <div class="flex flex-wrap bg-stone-950 border border-stone-850 p-1.5 gap-1 rounded mb-4 overflow-x-auto">
+                <button onclick="switchTab('buildings')" id="tab-btn-buildings" class="tab-btn flex-1 min-w-[90px] text-center px-3 py-2 text-xs font-bold tracking-wider uppercase rounded transition-all cursor-pointer bg-amber-500 text-black">
+                    <i class="fa-solid fa-network-wired mr-1"></i>Assets
+                </button>
+                <button onclick="switchTab('upgrades')" id="tab-btn-upgrades" class="tab-btn flex-1 min-w-[90px] text-center px-3 py-2 text-xs font-bold tracking-wider uppercase rounded transition-all cursor-pointer text-stone-400 hover:bg-stone-900">
+                    <i class="fa-solid fa-microchip mr-1"></i>Upgrades
+                </button>
+                <button onclick="switchTab('prestige')" id="tab-btn-prestige" class="tab-btn flex-1 min-w-[90px] text-center px-3 py-2 text-xs font-bold tracking-wider uppercase rounded transition-all cursor-pointer text-stone-400 hover:bg-stone-900">
+                    <i class="fa-solid fa-building-shield mr-1"></i>Reputation
+                </button>
+                <button onclick="switchTab('achievements')" id="tab-btn-achievements" class="tab-btn flex-1 min-w-[90px] text-center px-3 py-2 text-xs font-bold tracking-wider uppercase rounded transition-all cursor-pointer text-stone-400 hover:bg-stone-900">
+                    <i class="fa-solid fa-trophy mr-1"></i>Trophies
+                </button>
+                <button onclick="switchTab('terminal')" id="tab-btn-terminal" class="tab-btn flex-1 min-w-[90px] text-center px-3 py-2 text-xs font-bold tracking-wider uppercase rounded transition-all cursor-pointer text-stone-400 hover:bg-stone-900">
+                    <i class="fa-solid fa-terminal mr-1"></i>System
+                </button>
+            </div>
+
+            <div class="flex-grow">
+                
+                <div id="tab-buildings" class="tab-content space-y-3">
+                    <div class="bg-stone-950 border border-stone-900 p-3 rounded flex justify-between items-center text-xs text-stone-400">
+                        <span>Acquire front businesses & digital shell firms to maximize automated flow channels.</span>
+                        <div class="flex gap-1 bg-stone-900 p-1 rounded border border-stone-800">
+                            <button onclick="setBuyMultiplier(1)" id="buy-x1" class="buy-mult-btn px-2 py-0.5 rounded font-bold bg-amber-500 text-black">x1</button>
+                            <button onclick="setBuyMultiplier(10)" id="buy-x10" class="buy-mult-btn px-2 py-0.5 rounded font-bold hover:bg-stone-800">x10</button>
+                            <button onclick="setBuyMultiplier(100)" id="buy-x100" class="buy-mult-btn px-2 py-0.5 rounded font-bold hover:bg-stone-800">x100</button>
+                        </div>
+                    </div>
+                    <div id="shop-container" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        </div>
+                </div>
+
+                <div id="tab-upgrades" class="tab-content hidden space-y-3">
+                    <div class="bg-stone-950 border border-stone-900 p-3 rounded text-xs text-stone-400">
+                        Deploy hardware improvements, cryptographic encryptions, or leverage insider tracking channels.
+                    </div>
+                    <div id="upgrades-container" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        </div>
+                </div>
+
+                <div id="tab-prestige" class="tab-content hidden">
+                    <div class="bg-stone-950 border border-stone-850 p-6 rounded flex flex-col items-center text-center gap-4">
+                        <div class="w-16 h-16 bg-cyan-950/40 border-2 border-cyan-500 rounded-full flex items-center justify-center text-cyan-400 text-2xl shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                            <i class="fa-solid fa-id-card"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-stone-200 uppercase tracking-wider">Launder Empire Reputation</h3>
+                            <p class="text-xs text-stone-400 max-w-xl mx-auto mt-2 leading-relaxed">
+                                When your profile grows too visible, your current operations face complete saturation. By executing a global asset cleanup and shifting identities, you swap liquid capital and infrastructure assets for permanent, untouchable elite market <span class="text-cyan-400 font-bold">Reputation points</span>.
+                            </p>
+                            <p class="text-xs text-stone-500 mt-2">
+                                Each point of Reputation guarantees a permanent compounding <span class="text-cyan-400 font-bold">+2% boost to total revenue generation capabilities</span> across all upcoming structures.
+                            </p>
+                        </div>
+
+                        <div class="bg-stone-900 p-4 rounded border border-stone-800 w-full max-w-md grid grid-cols-2 gap-2 text-xs text-center">
+                            <div>
+                                <p class="text-stone-500 uppercase tracking-widest font-bold">Current Reputation</p>
+                                <p id="prestige-current-influence" class="text-xl font-bold text-cyan-400">0 Rep</p>
+                            </div>
+                            <div>
+                                <p class="text-stone-500 uppercase tracking-widest font-bold">Gained On Reset</p>
+                                <p id="prestige-gain-influence" class="text-xl font-bold text-emerald-400">+0 Rep</p>
+                            </div>
+                        </div>
+
+                        <button id="prestige-trigger-btn" onclick="executePrestige()" class="bg-cyan-950 border border-cyan-500 hover:bg-cyan-900 text-cyan-200 text-xs font-bold px-6 py-3 rounded uppercase tracking-widest shadow-lg transition-all active:scale-95 cursor-pointer">
+                            INITIATE CLEAN SYNDICATE SHIFT
+                        </button>
+                        <p class="text-[10px] text-stone-600">Requires a minimum of $1.0M accumulated cash to claim a secure new identification registry profile.</p>
+                    </div>
+                </div>
+
+                <div id="tab-achievements" class="tab-content hidden space-y-3">
+                    <div id="achievements-container" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        </div>
+                </div>
+
+                <div id="tab-terminal" class="tab-content hidden">
+                    <div class="bg-stone-950 border border-stone-850 p-6 rounded space-y-6">
+                        <div>
+                            <h3 class="text-sm font-bold text-stone-200 uppercase tracking-wider mb-2 border-b border-stone-800 pb-1">Data Registry Backup Matrix</h3>
+                            <p class="text-xs text-stone-400 mb-4">Manually update, offload, or clear the system non-volatile engine configurations stored directly in browser local storage.</p>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="saveGame(true)" class="bg-stone-900 border border-stone-700 hover:bg-stone-800 text-stone-300 text-xs px-4 py-2 rounded font-bold cursor-pointer">
+                                    <i class="fa-solid fa-floppy-disk mr-1.5"></i>SAVE SYSTEM
+                                </button>
+                                <button onclick="exportSave()" class="bg-stone-900 border border-stone-700 hover:bg-stone-800 text-stone-300 text-xs px-4 py-2 rounded font-bold cursor-pointer">
+                                    <i class="fa-solid fa-file-export mr-1.5"></i>EXPORT STRING
+                                </button>
+                                <button onclick="importSave()" class="bg-stone-900 border border-stone-700 hover:bg-stone-800 text-stone-300 text-xs px-4 py-2 rounded font-bold cursor-pointer">
+                                    <i class="fa-solid fa-file-import mr-1.5"></i>IMPORT STRING
+                                </button>
+                                <button onclick="hardResetGame()" class="bg-red-950 border border-red-800 hover:bg-red-900 text-red-200 text-xs px-4 py-2 rounded font-bold cursor-pointer ml-auto">
+                                    <i class="fa-solid fa-trash-can mr-1.5"></i>HARD WIPE SYSTEM
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-sm font-bold text-stone-200 uppercase tracking-wider mb-2 border-b border-stone-800 pb-1">Operational Prompts for Visuals</h3>
+                            <p class="text-xs text-stone-400 leading-relaxed">
+                                If you wish to use an external AI image generator (e.g., Midjourney, DALL-E) to produce complementary assets for this game interface, consider these prompts:
+                            </p>
+                            <blockquote class="border-l-2 border-amber-500 bg-stone-900/60 p-3 text-[11px] text-stone-400 mt-2 italic rounded-r space-y-1">
+                                <p><b>Background Vector:</b> "Dark tech hacker interface overlay with subtle gold matrix neon glowing grids, ultra-minimalist game UI background design, asset density 8k, dark amber theme --ar 16:9"</p>
+                                <p class="mt-1"><b>Asset Tokens:</b> "Isometric micro icon token of cybernetic money vault briefcase, neon gold lines, isolated on completely black background --v 6.0"</p>
+                            </blockquote>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
+
+    <div id="offline-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-stone-950 border-2 border-amber-500 p-6 rounded max-w-md w-full text-center space-y-4 shadow-2xl">
+            <div class="w-12 h-12 bg-amber-950 border border-amber-500 rounded-full flex items-center justify-center text-amber-400 text-xl mx-auto animate-pulse">
+                <i class="fa-solid fa-network-wired"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-amber-500 tracking-wider uppercase">Vault Processing Report</h3>
+                <p class="text-xs text-stone-400 mt-1">Your automated front networks operated securely while system connections were down-regulated.</p>
+            </div>
+            <div class="bg-stone-900 p-3 rounded border border-stone-800 text-xs space-y-1 text-left">
+                <div class="flex justify-between"><span>Offline Duration:</span><span id="offline-time" class="font-bold text-stone-300">0s</span></div>
+                <div class="flex justify-between"><span>Unregulated Revenue Secured:</span><span id="offline-cash" class="font-bold text-emerald-400">+$0</span></div>
+                <div class="flex justify-between"><span>Regulated Heat Cooldown:</span><span id="offline-heat" class="font-bold text-amber-500">-0%</span></div>
+            </div>
+            <button onclick="closeOfflineModal()" class="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs py-2 rounded uppercase tracking-wider cursor-pointer transition-colors">
+                Decrypt and Sync Data
+            </button>
+        </div>
+    </div>
+
     <script>
-        let G = {
-            cash: 100, heat: 0, isHiding: false,
+        // --- GAME INITIAL CONFIGURATIONS & STATE MANAGEMENT ---
+        const INITIAL_STATE = {
+            cash: 100,
+            totalCashEarned: 100,
+            heat: 0,
+            isHiding: false,
+            influence: 0, // Prestige currency
+            totalRaids: 0,
+            startTime: Date.now(),
+            lastSaveTime: Date.now(),
+            buyMultiplier: 1,
             strains: { efficiency: 1.0, stealth: 1.0, aggressivity: 1.0 },
+            
+            // 10 Detailed thematic operations ranging from front brick-and-mortar to high tech syndicates
             shops: [
-                { name: 'Lemonade Stand', baseIncome: 1, owned: 0, type: 'standard' },
-                { name: 'Toy Store', baseIncome: 10, owned: 0, type: 'high-heat' }
+                { id: 'lemonade', name: 'Lemonade Stand Front', emoji: '🍋', baseIncome: 1.2, cost: 10, owned: 0, type: 'standard', desc: 'A primitive neighborhood front. Cleans negligible volumes but raises zero suspicion.' },
+                { id: 'toystore', name: 'Subterranean Toy Store', emoji: '🧸', baseIncome: 8, cost: 120, owned: 0, type: 'standard', desc: 'Hidden backrooms house lightweight alternative distribution platforms.' },
+                { id: 'vape_shop', name: 'Neon Vapor Lounge', emoji: '💨', baseIncome: 45, cost: 1400, owned: 0, type: 'high-heat', desc: 'High customer velocity creates a beautiful fog for obfuscating bookkeeping trails.' },
+                { id: 'crypto_mine', name: 'Illicit Computing Farm', emoji: '⛏️', baseIncome: 260, cost: 18500, owned: 0, type: 'high-heat', desc: 'Unmapped rigs sucking grid juice to forge anonymous distributed tokens.' },
+                { id: 'nightclub', name: 'Gilded Velvet Club', emoji: '🍸', baseIncome: 1400, cost: 220000, owned: 0, type: 'standard', desc: 'Premium, cash-heavy high society nightlife operations where cash traces vanish into pure mist.' },
+                { id: 'shell_firm', name: 'Offshore Shell Registry', emoji: '📁', baseIncome: 8500, cost: 2900000, owned: 0, type: 'stealth', desc: 'Ghost holding legal corporate structures based out of remote tropical jurisdictions.' },
+                { id: 'casino', name: 'Digital Ledger Casino', emoji: '🎲', baseIncome: 55000, cost: 42000000, owned: 0, type: 'high-heat', desc: 'Algorithmic micro-betting houses processing massive transactional velocities hourly.' },
+                { id: 'cargo_line', name: 'Ghost Fleet Logistics', emoji: '🚢', baseIncome: 380000, cost: 650000000, owned: 0, type: 'stealth', desc: 'Automated oceanic cargo routing switching manifests mid-transit.' },
+                { id: 'private_bank', name: 'Autonomous Swiss Node', emoji: '🏦', baseIncome: 2900000, cost: 11000000000, owned: 0, type: 'stealth', desc: 'Bespoke high-finance enclave catering strictly to high-profile anonymous magnates.' },
+                { id: 'orbital_grid', name: 'Quantum Orbital Network', emoji: '🛰️', baseIncome: 25000000, cost: 190000000000, owned: 0, type: 'high-heat', desc: 'A secure string of low-orbit satellites handling instant uninterceptable dark transfers.' }
+            ],
+            
+            // 16 Purchases offering strategic alternatives
+            upgrades: [
+                { id: 'up_click_01', name: 'Optimized Handshakes', cost: 50, purchased: false, desc: 'Doubles manual clicking income.', impact: { type: 'click_mult', val: 2 } },
+                { id: 'up_click_02', name: 'Duplex Smart Switches', cost: 750, purchased: false, desc: 'Triples manual clicking income.', impact: { type: 'click_mult', val: 3 } },
+                { id: 'up_eff_01', name: 'Aggressive Ledger Cooking', cost: 400, purchased: false, desc: 'Boosts total automated income by 25%, but marginally shifts base heat scales.', impact: { type: 'strain_eff', val: 0.25 } },
+                { id: 'up_eff_02', name: 'Algorithmic Arbitrage', cost: 12000, purchased: false, desc: 'Boosts total automated income by 40%.', impact: { type: 'strain_eff', val: 0.40 } },
+                { id: 'up_eff_03', name: 'Synthetic Liquidity Pools', cost: 650000, purchased: false, desc: 'Boosts total automated income by 50%.', impact: { type: 'strain_eff', val: 0.50 } },
+                { id: 'up_stl_01', name: 'Deep Web Domain Shuffling', cost: 1000, purchased: false, desc: 'Cuts overall base threat production rates by 20%.', impact: { type: 'strain_stl', val: 0.20 } },
+                { id: 'up_stl_02', name: 'Dark Fiber Routing Matrix', cost: 85000, purchased: false, desc: 'Cuts overall base threat production rates by 30%.', impact: { type: 'strain_stl', val: 0.30 } },
+                { id: 'up_stl_03', name: 'Quantum Encrypted Satellites', cost: 15000000, purchased: false, desc: 'Cuts overall base threat production rates by 40%.', impact: { type: 'strain_stl', val: 0.40 } },
+                { id: 'up_spec_lemon', name: 'Organic Lemon Overdrive', cost: 300, purchased: false, desc: 'Lemonade stands gain +150% structural efficiency.', impact: { type: 'shop_boost', target: 'lemonade', val: 1.5 } },
+                { id: 'up_spec_vape', name: 'Premium Synthesis Juices', cost: 5000, purchased: false, desc: 'Vapor lounges gain +100% structural efficiency.', impact: { type: 'shop_boost', target: 'vape_shop', val: 1.0 } },
+                { id: 'up_spec_crypto', name: 'Asic Liquid Helium Cooling', cost: 100000, purchased: false, desc: 'Computing Farms gain +100% structural efficiency.', impact: { type: 'shop_boost', target: 'crypto_mine', val: 1.0 } },
+                { id: 'up_spec_shell', name: 'Panama Loophole Saturation', cost: 8000000, purchased: false, desc: 'Shell firms gain +120% structural efficiency.', impact: { type: 'shop_boost', target: 'shell_firm', val: 1.2 } },
+                { id: 'up_spec_casino', name: 'Rigged House Architectures', cost: 120000000, purchased: false, desc: 'Digital Casinos gain +100% structural efficiency.', impact: { type: 'shop_boost', target: 'casino', val: 1.0 } },
+                { id: 'up_spec_bank', name: 'VIP Shadow Access Ports', cost: 5000000000, purchased: false, desc: 'Swiss Nodes gain +150% structural efficiency.', impact: { type: 'shop_boost', target: 'private_bank', val: 1.5 } },
+                { id: 'up_insurance', name: 'Corrupted Audit Contingencies', cost: 250000, purchased: false, desc: 'Reduces structural loss penalities during a breakdown/shutdown raid from 20% to just 5%.', impact: { type: 'insurance', val: 0.05 } },
+                { id: 'up_bribe', name: 'Permanent Bureaucratic Bribes', cost: 4500000, purchased: false, desc: 'The threshold where heat triggers WARNING alarms expands significantly.', impact: { type: 'bribe', val: true } }
+            ],
+            
+            achievements: [
+                { id: 'ach_cash_01', name: 'Street Level Broker', desc: 'Accumulate an aggregate of $10,000 across history.', unlocked: false, reward: 'Prestige threshold lowered.' },
+                { id: 'ach_cash_02', name: 'Untouchable Tycoon', desc: 'Accumulate an aggregate of $50,000,000 across history.', unlocked: false, reward: '+10% clicking baseline power.' },
+                { id: 'ach_assets', name: 'Industrial Consolidation', desc: 'Hold a combined volume of 50 enterprise infrastructure nodes.', unlocked: false, reward: 'Assets base cost scales 2% cheaper.' },
+                { id: 'ach_stealth', name: 'Ghost Protocol Activated', desc: 'Spend 5 continuous minutes running processing channels.', unlocked: false, reward: 'Cool down optimization +5% efficiency.' },
+                { id: 'ach_raid_01', name: 'Battle Scarred Veteran', desc: 'Survive your first systemic regulatory shutdown/raid event.', unlocked: false, reward: 'Emergency recovery funds +$5,000.' },
+                { id: 'ach_prestige_01', name: 'Fresh Facial Construction', desc: 'Execute your first Clean Syndicate Shift prestige transition.', unlocked: false, reward: 'Gain +1 permanent Reputation point.' },
+                { id: 'ach_high_heat', name: 'Living On The Knife Edge', desc: 'Maintain an operations heat level above 90% for 30 consecutive seconds.', unlocked: false, reward: 'High heat nodes yield +15% revenue.' },
+                { id: 'ach_completion', name: 'Global Syndicate Nexus', desc: 'Own at least 1 unit of every single asset infrastructure classification.', unlocked: false, reward: 'Global efficiency output scaled up by +25% permanent.' }
             ]
         };
 
-        const hideBtn = document.getElementById('hide-btn');
-        hideBtn.onclick = () => { G.isHiding = !G.isHiding; hideBtn.innerText = G.isHiding ? "RESUME OPS" : "HIDE OPERATIONS"; };
+        // Current actively running state container cloned or parsed from local storage
+        let G = JSON.parse(JSON.stringify(INITIAL_STATE));
+        let activeTab = 'buildings';
+        let highHeatTimer = 0; // tracking time above 90% heat for achievements
+        let cleanRunTimer = 0; // tracking active runtime without raiding
 
-        function renderShop() {
-            const shopDiv = document.getElementById('shop');
-            shopDiv.innerHTML = ''; 
-            G.shops.forEach((s) => {
-                let div = document.createElement('div');
-                div.className = 'item';
-                div.innerHTML = `${s.name} - $${s.baseIncome}/s (Owned: ${s.owned})`;
-                div.onclick = () => {
-                    let cost = s.baseIncome * 10;
-                    if (G.cash >= cost) {
-                        G.cash -= cost;
-                        s.owned++;
-                        renderShop();
+        // --- MATH / SIMULATION ENGINE (Integrated & Optimized) ---
+        const SimulationEngine = {
+            calculateIncome: (state) => {
+                let total = state.shops.reduce((sum, s) => {
+                    let shopMult = 1.0;
+                    // Apply upgrade specific multipliers
+                    state.upgrades.forEach(u => {
+                        if (u.purchased && u.impact.type === 'shop_boost' && u.impact.target === s.id) {
+                            shopMult += u.impact.val;
+                        }
+                    });
+                    // Apply specific achievements bonus
+                    if (state.achievements.find(a => a.id === 'ach_high_heat')?.unlocked && s.type === 'high-heat') {
+                        shopMult += 0.15;
                     }
-                };
-                shopDiv.appendChild(div);
-            });
-        }
+                    return sum + (s.baseIncome * s.owned * shopMult * state.strains.efficiency);
+                }, 0);
 
-        function gameLoop() {
-            let state = SimulationEngine.getAuditState(G.heat);
-            
-            if (state.severity === "SHUTDOWN") {
-                G = SimulationEngine.processFailure(G);
-                G.heat = 50;
-                alert("RAID SUCCESSFUL: Assets seized, mutations neutralized.");
-                renderShop();
+                // Apply Global Prestige Multipliers (+2% per point of reputation)
+                let repMultiplier = 1 + (state.influence * 0.02);
+                total *= repMultiplier;
+
+                // Apply Global Completion Achievement
+                if (state.achievements.find(a => a.id === 'ach_completion')?.unlocked) {
+                    total *= 1.25;
+                }
+
+                return total;
+            },
+
+            calculateHeatImpact: (state) => {
+                // Diminishing strain returns on stealth modifications
+                let stealthReduction = 0;
+                state.upgrades.forEach(u => {
+                    if (u.purchased && u.impact.type === 'strain_stl') {
+                        stealthReduction += u.impact.val;
+                    }
+                });
+                const clampedStealth = Math.max(0.1, 1 - stealthReduction);
+
+                return state.shops.reduce((heat, s) => {
+                    let baseFactor = (s.type === 'high-heat') ? 0.005 : (s.type === 'stealth' ? 0.0005 : 0.0015);
+                    return heat + ((s.owned * (s.baseIncome * 0.05)) * clampedStealth * baseFactor);
+                }, 0);
+            },
+
+            getAuditState: (heat, upgrades) => {
+                const hasBribe = upgrades.find(u => u.id === 'up_bribe' && u.purchased);
+                const warnThreshold = hasBribe ? 80 : 70;
+                const critThreshold = hasBribe ? 92 : 85;
+
+                if (heat >= 100) return { active: true, severity: "SHUTDOWN" };
+                if (heat >= critThreshold) return { active: true, severity: "CRITICAL" };
+                if (heat >= warnThreshold) return { active: false, severity: "WARNING" };
+                return { active: false, severity: "STABLE" };
+            },
+
+            processFailure: (state) => {
+                // Determine loss factor based on insurance upgrade ownership
+                const hasInsurance = state.upgrades.find(u => u.id === 'up_insurance' && u.purchased);
+                const lossFactor = hasInsurance ? 0.05 : 0.20;
+
+                // Raid seizes assets across ALL sectors proportionately
+                state.shops.forEach(s => {
+                    if (s.owned > 0) {
+                        s.owned = Math.max(0, s.owned - Math.ceil(s.owned * lossFactor));
+                    }
+                });
+
+                state.totalRaids++;
+                return state;
             }
+        };
 
-            document.getElementById('audit-status').innerText = state.severity;
-            document.body.className = state.active ? 'critical' : '';
-            hideBtn.style.display = (state.severity !== 'STABLE') ? 'inline-block' : 'none';
-
-            let inc = G.isHiding ? 0 : SimulationEngine.calculateIncome(G.shops, G.strains);
-            let heatInc = G.isHiding ? -0.5 : SimulationEngine.calculateHeatImpact(G.shops, G.strains);
-            
-            G.cash += inc / 60;
-            G.heat = Math.max(0, Math.min(100, G.heat + (heatInc / 60)));
-
-            document.getElementById('cash').innerText = Math.floor(G.cash);
-            document.getElementById('income').innerText = inc.toFixed(1);
-            document.getElementById('heat').innerText = G.heat.toFixed(1) + '%';
+        // --- HELPER UTILITIES: NUMBER FORMATTING ---
+        function formatNum(num) {
+            if (num === null || isNaN(num)) return "0.00";
+            if (num < 1000) return num.toFixed(2);
+            const suffixes = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
+            const i = Math.floor(Math.log10(num) / 3);
+            const formatted = (num / Math.pow(10, i * 3)).toFixed(2);
+            return `${formatted}${suffixes[i]}`;
         }
+
+        function formatTime(ms) {
+            let totalSecs = Math.floor(ms / 1000);
+            let hrs = Math.floor(totalSecs / 3600).toString().padStart(2, '0');
+            let mins = Math.floor((totalSecs % 3600) / 60).toString().padStart(2, '0');
+            let secs = (totalSecs % 60).toString().padStart(2, '0');
+            return `${hrs}:${mins}:${secs}`;
+        }
+
+        // --- TOAST NOTIFICATION ENGINE ---
+        function createToast(title, message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const typeStyles = {
+                info: 'border-amber-500/50 bg-stone-950 text-stone-200',
+                success: 'border-emerald-500 bg-stone-950 text-emerald-400',
+                danger: 'border-red-600 bg-stone-950 text-red-400 bg-critical-pulse',
+                prestige: 'border-cyan-500 bg-stone-950 text-cyan-400'
+            };
+
+            toast.className = `border p-3 rounded shadow-xl pointer-events-auto flex flex-col gap-1 text-xs transition-all duration-300 transform translate-y-2 opacity-0 ${typeStyles[type]}`;
+            toast.innerHTML = `
+                <div class="flex justify-between items-center font-bold uppercase tracking-wider">
+                    <span>${title}</span>
+                    <button class="opacity-50 hover:opacity-100 cursor-pointer" onclick="this.parentElement.parentElement.remove()">✕</button>
+                </div>
+                <p class="text-stone-400 font-mono">${message}</p>
+            `;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-10px]');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
+        // --- FLOATING TEXT CLICKS ---
+        function triggerFloatingText(e, text, colorClass = 'text-amber-500') {
+            const rect = document.getElementById('money-clicker').getBoundingClientRect();
+            const el = document.createElement('div');
+            el.className = `floating-text ${colorClass} text-sm font-mono`;
+            // Random variance in coordinate targeting around click zone
+            const randX = (Math.random() - 0.5) * 40;
+            const randY = (Math.random() - 0.5) * 40;
+            el.style.left = `${rect.left + window.scrollX + (rect.width/2) + randX}px`;
+            el.style.top = `${rect.top + window.scrollY + (rect.height/2) + randY}px`;
+            el.innerText = text;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 1000);
+        }
+
+        // --- GAME MECHANICS AND HOOKS ---
         
-        renderShop();
-        setInterval(gameLoop, 1000/60);
-    </script>
-</body>
-</html>
+        // Manual Click Input
+        document.getElementById('money-clicker').onclick = (e) => {
+            let clickVal = 1;
+            G.upgrades.forEach(u => {
+                if (u.purchased && u.impact.type === 'click_mult') clickVal *= u.impact.val;
+            });
+            if (G.achievements.find(a => a.id === 'ach_cash_02')?.unlocked) clickVal *= 1.1;
+
+            let finalClickIncome = clickVal * G.strains.efficiency;
+            G.cash += finalClickIncome;
+            G.totalCashEarned += finalClickIncome;
+
+            // Manual
