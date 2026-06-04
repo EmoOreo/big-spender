@@ -2,29 +2,36 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Big Spender: Idle Tycoon</title>
+    <title>Big Spender: Volatility Cycle</title>
     <style>
-        body { background: #0d0a05; color: #f5e9c8; font-family: monospace; }
+        body { background: #0d0a05; color: #f5e9c8; font-family: monospace; transition: background 0.5s; }
         #hud { background: #1a1409; padding: 15px; border-bottom: 2px solid #f7c325; }
+        .critical { background: #3d0a0a !important; }
         .item { border: 1px solid #f7c325; margin: 10px; padding: 10px; cursor: pointer; }
     </style>
 </head>
 <body>
     <div id="hud">
         Cash: $<span id="cash">100</span> | Income: $<span id="income">0</span>/s | Heat: <span id="heat">0%</span>
+        <br>
+        Status: <span id="audit-status">STABLE</span>
+        <button id="hide-btn" style="display:none;">HIDE OPERATIONS</button>
     </div>
     <div id="shop"></div>
 
     <script src="SimulationEngine.js"></script>
     <script>
         let G = {
-            cash: 100, heat: 0,
+            cash: 100, heat: 0, isHiding: false,
             strains: { efficiency: 1.0, stealth: 1.0, aggressivity: 1.0 },
             shops: [
                 { name: 'Lemonade Stand', baseIncome: 1, owned: 0, type: 'standard' },
                 { name: 'Toy Store', baseIncome: 10, owned: 0, type: 'high-heat' }
             ]
         };
+
+        const hideBtn = document.getElementById('hide-btn');
+        hideBtn.onclick = () => { G.isHiding = !G.isHiding; hideBtn.innerText = G.isHiding ? "RESUME OPS" : "HIDE OPERATIONS"; };
 
         function renderShop() {
             const shopDiv = document.getElementById('shop');
@@ -46,17 +53,30 @@
         }
 
         function gameLoop() {
-            let inc = SimulationEngine.calculateIncome(G.shops, G.strains);
-            let heatInc = SimulationEngine.calculateHeatImpact(G.shops, G.strains);
+            let state = SimulationEngine.getAuditState(G.heat);
+            
+            if (state.severity === "SHUTDOWN") {
+                G = SimulationEngine.processFailure(G);
+                G.heat = 50;
+                alert("RAID SUCCESSFUL: Assets seized, mutations neutralized.");
+                renderShop();
+            }
+
+            document.getElementById('audit-status').innerText = state.severity;
+            document.body.className = state.active ? 'critical' : '';
+            hideBtn.style.display = (state.severity !== 'STABLE') ? 'inline-block' : 'none';
+
+            let inc = G.isHiding ? 0 : SimulationEngine.calculateIncome(G.shops, G.strains);
+            let heatInc = G.isHiding ? -0.5 : SimulationEngine.calculateHeatImpact(G.shops, G.strains);
             
             G.cash += inc / 60;
-            G.heat = Math.min(100, G.heat + (heatInc / 60));
+            G.heat = Math.max(0, Math.min(100, G.heat + (heatInc / 60)));
 
             document.getElementById('cash').innerText = Math.floor(G.cash);
             document.getElementById('income').innerText = inc.toFixed(1);
             document.getElementById('heat').innerText = G.heat.toFixed(1) + '%';
         }
-
+        
         renderShop();
         setInterval(gameLoop, 1000/60);
     </script>
