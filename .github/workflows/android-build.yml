@@ -21,7 +21,7 @@ jobs:
     - name: Set up Node.js Environment
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22' # Fixed: Upgraded from 20 to 22 to satisfy Capacitor CLI
 
     - name: Clean Build Workspace Environment
       run: |
@@ -37,14 +37,28 @@ jobs:
         npx cap add android
         npx cap copy android
 
-    - name: Build Native App Package (Gradle)
+    - name: Compile Release APK (Gradle)
       run: |
         cd android
         chmod +x gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleRelease
 
-    - name: Upload Finished APK Artifact
+    - name: Extract Code Signing Certificate from Vault
+      run: |
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/bigspender-release.jks
+
+    - name: Inject Secure Cryptographic Signature
+      run: |
+        cd android/app/build/outputs/apk/release/
+        ${ANDROID_HOME}/build-tools/34.0.0/apksigner sign \
+          --ks ../../../../bigspender-release.jks \
+          --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
+          --ks-key-alias ${{ secrets.KEY_ALIAS }} \
+          --out BigSpenderTycoon.apk \
+          app-release-unsigned.apk
+
+    - name: Upload Finished Signed APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: BigSpenderTycoon-GameFile
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        name: BigSpenderTycoon-SignedGame
+        path: android/app/build/outputs/apk/release/BigSpenderTycoon.apk
