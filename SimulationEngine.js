@@ -8,10 +8,15 @@ const SimulationEngine = {
     },
     
     // Calculates heat accumulation based on shop type and stealth strain
+    // Includes a diminishing returns cap to keep the FBI threat active
     calculateHeatImpact: (shops, strains) => {
+        const stealthCap = 0.2; 
+        const effectiveStealth = 1 / (1 + (strains.stealth - 1) * 0.5);
+        const clampedStealth = Math.max(stealthCap, effectiveStealth);
+
         return shops.reduce((heat, s) => {
-            let load = (s.owned * s.baseIncome) / strains.stealth;
-            // High-heat items (e.g., Toy Store) generate more risk
+            let load = (s.owned * s.baseIncome) * clampedStealth;
+            // High-heat items generate more risk
             let multiplier = (s.type === 'high-heat') ? 0.0002 : 0.00005;
             return heat + (load * multiplier);
         }, 0);
